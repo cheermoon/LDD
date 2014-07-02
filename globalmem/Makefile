@@ -1,6 +1,6 @@
-KO_NAME=module_ts
+KO_NAME=globalmem
 PWD:=$(shell pwd)
-KERNEL_BUILD_PATH=/usr/src/linux-headers-3.5.0-48-generic
+KERNEL_BUILD_PATH=/usr/src/linux-headers-2.6.32-38-generic
 
 obj-m += $(KO_NAME).o
 
