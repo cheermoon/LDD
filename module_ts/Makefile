@@ -1,15 +1,11 @@
 KO_NAME=module_ts
 PWD:=$(shell pwd)
-KERNEL_BUILD_PATH=/home/moon/GS702C_140411/GS702C_sdk/leopard/kernel/linux-3.4-release
-R_CROSS_COMPILE=/opt/arm-2011.09/bin/arm-none-linux-gnueabi-
-R_ARCH=arm
+KERNEL_BUILD_PATH=/usr/src/linux-headers-3.13.0-24-generic
 
 obj-m += $(KO_NAME).o
 
 default:
-	$(MAKE) -C $(KERNEL_BUILD_PATH) ARCH=$(R_ARCH) CROSS_COMPILE=$(R_CROSS_COMPILE) \
-	M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_BUILD_PATH) M=$(PWD) modules
 
 clean:
-	$(MAKE) -C $(KERNEL_BUILD_PATH) ARCH=$(R_ARCH) CROSS_COMPILE=$(R_CROSS_COMPILE) \
-	 M=$(PWD) clean
+	$(MAKE) -C $(KERNEL_BUILD_PATH) M=$(PWD) clean

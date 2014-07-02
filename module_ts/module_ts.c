@@ -3,13 +3,13 @@
 
 static int __init mod_init(void)
 {
-	printk(KERN_ALERT"init");
+	printk(KERN_ALERT"init\n");
 	return 0;
 }
 
 static void __exit mod_exit(void)
 {
-	printk(KERN_ALERT"exit");
+	printk(KERN_ALERT"exit\n");
 }
 
 
