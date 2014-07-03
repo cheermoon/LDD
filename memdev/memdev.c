@@ -137,6 +137,7 @@ static void memdev_setup(struct memdev_dev *dev, int index)
 	if (err)
 	printk(KERN_ERR"erro : %s line:%d\n", __FUNCTION__, __LINE__);
 }
+
 static int __init memdev_init(void)
 {
 	int ret;
