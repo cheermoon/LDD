@@ -1,34 +1,96 @@
 #include <linux/module.h>
-#include <linux/mm.h>
 #include <linux/init.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
+#include <linux/kernel.h>
+#include <linux/uaccess.h>
 
 #define MEMDEV_SIZE 1024
 #define MEMDEV_MAJOR 0
 
-#define LIX_26 0 //I compile the programm in Ubuntu 10.04 12.04LST 14.04LST
+#define LIX_26 1 //I compile the programm in Ubuntu 10.04 12.04LST 14.04LST
 
 static int memdev_major = MEMDEV_MAJOR;
 
 struct memdev_dev {
 	struct cdev cdev;
 	char mem[MEMDEV_SIZE];
-};
+} *devp;
 
 loff_t memdev_llseek(struct file *fp, loff_t off, int ori)
 {
+	int ret =0;
+
+	switch (ori) {
+		case 0: {
+				if (off < 0 || off > MEMDEV_SIZE) {
+					return -EINVAL;
+				}
+				fp->f_pos = off;
+				ret = fp->f_pos;
+				break;
+		}
+		case 1: {
+				if (fp->f_pos + off < 0 || fp->f_pos + off > MEMDEV_SIZE) {
+					return -EINVAL;
+				}
+				fp->f_pos += off;
+				ret = fp->f_pos;
+				break;
+		}
+		default: return -EINVAL;
+	}
 	return 0;
 }
 
 ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *offp)
 {
-	return 0;
+	struct memdev_dev *devp = fp->private_data;
+	unsigned int size = count;
+	unsigned long p = *offp;
+	int ret = 0;
+
+	if ( p > MEMDEV_SIZE) {
+		return -EINVAL;
+	}
+	if (p + count > MEMDEV_SIZE) {
+		size = MEMDEV_SIZE - p;
+	}
+
+	if (copy_to_user(buff, devp->mem, size)) {
+		ret = -EFAULT;
+	} else {
+		ret = size;
+		*offp += size;
+		printk(KERN_INFO"%s:%d read %d bytes from mem!\n", __FUNCTION__, __LINE__, size);
+	}
+
+	return ret;
 }
 
 ssize_t memdev_write(struct file *fp, const char __user *buff, size_t count, loff_t *offp)
 {
-	return 0;
+	struct memdev_dev *devp = fp->private_data;
+	unsigned int size = count;
+	unsigned long p = *offp;
+	int ret = 0;
+
+	if ( p > MEMDEV_SIZE) {
+		return -EINVAL;
+	}
+	if (p + count > MEMDEV_SIZE) {
+		size = MEMDEV_SIZE - p;
+	}
+
+	if (copy_from_user(devp->mem, buff, size)){
+		ret = -EFAULT;
+	} else {
+		ret = size;
+		*offp += size;
+		printk(KERN_INFO"%s:%d write %d bytes from mem!\n", __FUNCTION__, __LINE__, size);
+	}
+	
+	return ret;
 }
 #if LIX_26
 int memdev_ioctl(struct inode *nodep, struct file *fp, unsigned int cmd, unsigned long arg)
@@ -38,6 +100,10 @@ int memdev_ioctl(struct inode *nodep, struct file *fp, unsigned int cmd, unsigne
 #endif
 int memdev_open(struct inode *nodep, struct file *fp)
 {
+	struct memdev_dev *devp;
+	devp = container_of(nodep->i_cdev, struct memdev_dev, cdev);
+	fp->private_data = devp;
+
 	return 0;
 }
 
@@ -89,13 +155,13 @@ static int __init memdev_init(void)
 		return ret;
 	}
 
-	struct memdev_dev *devp = kmalloc(sizeof(struct memdev_dev), GFP_KERNEL);//google the function
-	if (!devp) {
+	devp = kmalloc(sizeof(struct memdev_dev), GFP_KERNEL);//google the function
+	if (!devp) {	
 		printk(KERN_ERR"err : %s line:%d\n", __FUNCTION__, __LINE__);
 		unregister_chrdev_region(devno, 1);
 		return -ENOMEM;
 	}
-	memset(dev, 0, sizeof(struct memdev_dev));
+	memset(devp, 0, sizeof(struct memdev_dev));
 
 	memdev_setup(devp, 0);
 	return 0;
@@ -103,6 +169,9 @@ static int __init memdev_init(void)
 
 static void __exit memdev_exit(void)
 {
+	cdev_del(&devp->cdev);
+	kfree(devp);
+	unregister_chrdev_region(MKDEV(memdev_major, 0), 1);
 }
 
 
