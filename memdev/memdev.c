@@ -1,3 +1,22 @@
+/*  
+ memdev.c : ldd
+
+	Author : moon.cheng.2014@gmail.com  
+	Date   : 2014-08-05
+	Version: 1.0
+			
+	This program is a demo program for linux device drivers created by moon. 
+	It is a driver for a segment of memory.You can use the interface it supply 
+	to operate the memory. Such as read,write or clear it.
+				
+	If you find some bugs or you have some advices. Send me a email pls!
+					
+	This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+ */
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
@@ -22,24 +41,24 @@ loff_t memdev_llseek(struct file *fp, loff_t off, int ori)
 	int ret;
 
 #if M_DEBUG
-	printk(KERN_INFO"%s:%d off = %d ori = %u\n", __func__, __LINE__,off, ori);
+	printk(KERN_INFO"%s:%d off = %d ori = %d\n", __func__, __LINE__,off, ori);
 #endif
 	switch (ori) {
-		case 0 :
+		case SEEK_SET:
 			if (off < 0 || off > MEM_SIZE) {
 				return -EINVAL;
 			}
 			fp -> f_pos = off;
 			ret = fp -> f_pos;
 			break;
-		case SEEK_CUR :
+		case SEEK_CUR:
 			if ((fp->f_pos + off < 0) || (fp->f_pos + off > MEM_SIZE)) {
 				return -EINVAL;
 			}
 			fp -> f_pos += off;	
 			ret = fp -> f_pos;
 			break;
-		case SEEK_END :
+		case SEEK_END:
 			if (off < 0 || off > MEM_SIZE) {
 				return -EINVAL;
 			}
@@ -59,7 +78,7 @@ ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *f_
 	unsigned long p = *f_pos;
 	int ret = 0;
 #if M_DEBUG
-	printk(KERN_INFO"%s:%d *f_pos = %d size = %u\n", __func__, __LINE__, p, size);
+	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
 #endif
 	if ( p > MEM_SIZE) {
 		return -EINVAL;
@@ -74,7 +93,7 @@ ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *f_
 		ret = size;
 		*f_pos += size;
 #if M_DEBUG
-		printk(KERN_INFO"%s:%d read %u bytes from mem!\n", __func__, __LINE__, size);
+		printk(KERN_INFO"%s:%d read %d bytes from mem!\n", __func__, __LINE__, size);
 #endif
 	}
 
@@ -88,7 +107,7 @@ ssize_t memdev_write(struct file *fp, const char __user *buff, size_t count, lof
 	unsigned long p = *f_pos;
 	int ret = 0;
 #if M_DEBUG
-	printk(KERN_INFO"%s:%d *f_pos = %d size = %u\n", __func__, __LINE__, p, size);
+	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
 #endif
 	if ( p > MEM_SIZE) {
 		return -EINVAL;
@@ -103,7 +122,7 @@ ssize_t memdev_write(struct file *fp, const char __user *buff, size_t count, lof
 		ret = size;
 		*f_pos += size;
 #if M_DEBUG
-		printk(KERN_INFO"%s:%d write %u bytes to mem!\n", __func__, __LINE__, size);
+		printk(KERN_INFO"%s:%d write %d bytes to mem!\n", __func__, __LINE__, size);
 #endif
 	}
 	
@@ -121,7 +140,7 @@ int memdev_ioctl(struct inode *nodep, struct file *fp, unsigned int cmd, unsigne
 	switch (cmd) {
 		case 0 : 
 			devp = fp -> private_data;
-			 memset(devp, 0, sizeof(struct memdev));
+			 memset(devp->mem, 0, MEM_SIZE);
 			break;
 		default : ret = -EINVAL;
 	}
@@ -131,14 +150,21 @@ int memdev_ioctl(struct inode *nodep, struct file *fp, unsigned int cmd, unsigne
 int memdev_open(struct inode *nodep, struct file *fp)
 {
 	struct memdev *devp;
+
 	devp = container_of(nodep->i_cdev, struct memdev, cdev);
 	fp->private_data = devp;
+#if M_DEBUG
+	printk(KERN_INFO"%s:%d you have open the device\n", __func__, __LINE__);
+#endif
 	return 0;
 }
 
 
 int memdev_release(struct inode *nodep, struct file *fp)
 {
+#if M_DEBUG
+	printk(KERN_INFO"%s:%d you have release the device\n", __func__, __LINE__);
+#endif
 	return 0;
 }
 
