@@ -34,6 +34,8 @@ DECLARE_MUTEX(mem_sem);
 struct memdev {
 	struct cdev cdev;
 	unsigned char mem[MEM_SIZE];
+//	spinlock_t mem_spin_lock;
+	rwlock_t mem_rw_lock;
 };
 
 
@@ -78,9 +80,21 @@ ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *f_
 	unsigned int size = count;
 	unsigned long p = *f_pos;
 	int ret = 0;
+	
 #if M_DEBUG
 	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
 #endif
+
+	//if (!spin_trylock(&devp->mem_spin_lock))
+	//	return -EBUSY;
+	//spin_lock(&devp->mem_spin_lock);
+	//mdelay(10000);
+	//spin_unlock(&devp->mem_spin_lock);
+
+	read_lock(&devp->mem_rw_lock);
+	mdelay(10000);
+	read_unlock(&devp->mem_rw_lock);
+
 	if ( p > MEM_SIZE) {
 		return -EINVAL;
 	}
@@ -110,6 +124,11 @@ ssize_t memdev_write(struct file *fp, const char __user *buff, size_t count, lof
 #if M_DEBUG
 	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
 #endif
+
+	write_lock(&devp->mem_rw_lock);
+	mdelay(10000);
+	write_unlock(&devp->mem_rw_lock);
+
 	if ( p > MEM_SIZE) {
 		return -EINVAL;
 	}
@@ -157,10 +176,10 @@ int memdev_open(struct inode *nodep, struct file *fp)
 	}
 
 	down(&mem_sem);
-#endif
 	if (!!down_interruptible(&mem_sem)) {
 			printk(KERN_INFO"YOU ARE BE INTERRUPTED!\n");
 	}
+#endif
 
 	
 	devp = container_of(nodep->i_cdev, struct memdev, cdev);
@@ -177,7 +196,9 @@ int memdev_release(struct inode *nodep, struct file *fp)
 #if M_DEBUG
 	printk(KERN_INFO"%s:%d you have release the device\n", __func__, __LINE__);
 #endif
+#if 0
 	up(&mem_sem);
+#endif
 	return 0;
 }
 
@@ -230,6 +251,9 @@ static int __init memdev_init(void)
 		unregister_chrdev_region(devno, 1);
 		return ret;
 	}
+
+	//spin_lock_init(&devp->mem_spin_lock);
+	rwlock_init(&devp->mem_rw_lock);
 
 	return 0;
 
