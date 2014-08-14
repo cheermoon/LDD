@@ -9,6 +9,9 @@
 
 #define BASE_ADDR (0x56000050)
 
+static struct class *led_cls;
+static struct class_device *led_cls_dev;
+
 struct led_dev {
 	struct cdev cdev;
 	volatile unsigned long *led_con;
@@ -104,6 +107,8 @@ static int __init led_init(void)
 		goto out2;//goto !!
 	}
 	
+	led_cls = class_create(THIS_MODULE, "led_drv");
+	led_cls_dev = class_device_create(led_cls, NULL, dev_no, NULL, "led_drv");
 	return 0; //init successful
 
 out2 :
@@ -115,6 +120,8 @@ out1 :
 
 static void __exit led_exit(void)
 {
+	class_device_unregister(led_cls_dev);
+	class_destroy(led_cls);
 	cdev_del(&devp->cdev);
 	unregister_chrdev_region(MKDEV(devp->major_no, 0),1);
 	kfree(devp);
