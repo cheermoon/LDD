@@ -27,22 +27,18 @@ static ssize_t led_write(struct file *fp, const char __user *buff, size_t size, 
 		return  -EFAULT;
 	}
 	/*config gpio to output mode*/
-//	tmp = ioread32(devp->led_con);
-	tmp = *(devp->led_con);
+	tmp = ioread32(devp->led_con);
 	tmp &= ~(3<<8 | 3<<10 | 3<<12);
 	tmp |= (1<<8 | 1<<10 | 1<<12);
-//	iowrite32(tmp, devp->led_con);
-	*(devp->led_con) = tmp;
+	iowrite32(tmp, devp->led_con);
 	/*update gpio ports state*/
-//	tmp = ioread32(devp->led_dat);
-	tmp = *(devp->led_dat);
+	tmp = ioread32(devp->led_dat);
 	if (1 == op) {
 		tmp &= ~(1<<4 | 1<<5 | 1<<6);
 	} else {
 		tmp |= (1<<4 | 1<<5 | 1<<6);
 	}
-//	iowrite32(tmp, devp->led_dat);
-	*(devp->led_dat) = tmp;
+	iowrite32(tmp, devp->led_dat);
 
 	return 0;
 }
@@ -52,7 +48,7 @@ static int led_close(struct inode *nd, struct file *fp)
 	struct led_dev *devp = fp->private_data;
 
 	iounmap(devp->led_con);
-	//release_mem_region(BASE_ADDR, 8);
+	release_mem_region(BASE_ADDR, 8);
 
 	return 0;
 }
@@ -62,11 +58,11 @@ static int led_open(struct inode *nd, struct file *fp)
 	struct led_dev *devp;
 	devp = container_of(nd->i_cdev, struct led_dev, cdev);
 	fp->private_data = devp;
-	/*
+	
 	if (!request_mem_region(BASE_ADDR, 8, "led_io")) {
 		return -ENOMEM;
 	}
-	*/
+	
 	devp->led_con = ioremap(BASE_ADDR, 8); //phy_addr 0x56000050
 	devp->led_dat = devp->led_con + 1; //pht_addr 0x56000054
 
