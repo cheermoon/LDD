@@ -27,7 +27,7 @@
 #include <asm/uaccess.h>/*copy_to_user & copy_from_user*/
 
 #define M_DEBUG 1  /*debug output infomation switch*/
-#define MEM_SIZE 512  /*memory size*/
+#define MEM_SIZE 8  /*memory size*/
 #define MAJOR_DEVNO 0 /*use 0 to use malloc_chrdev_region*/
 
 static int major_devno = MAJOR_DEVNO;	 
@@ -37,80 +37,51 @@ DECLARE_MUTEX(mem_sem);
 struct memdev {
 	struct cdev cdev;
 	unsigned char mem[MEM_SIZE];
+	unsigned long wp; //write position
+	unsigned long rp; //read position
 	struct rw_semaphore rw_sem;//read-write semphore
 	struct semaphore sem_open_restrict; //how many numbers can be opened
-	wait_queue_head_t mem_queue;
-	int flag;
+	wait_queue_head_t rd_queue;
+	wait_queue_head_t wr_queue;
 };
 
 
 loff_t memdev_llseek(struct file *fp, loff_t off, int ori)
 {
-	int ret;
-
-#if M_DEBUG
-	printk(KERN_INFO"%s:%d off = %d ori = %d\n", __func__, __LINE__,off, ori);
-#endif
-	switch (ori) {
-		case SEEK_SET:
-			if (off < 0 || off > MEM_SIZE) {
-				return -EINVAL;
-			}
-			fp -> f_pos = off;
-			ret = fp -> f_pos;
-			break;
-		case SEEK_CUR:
-			if ((fp->f_pos + off < 0) || (fp->f_pos + off > MEM_SIZE)) {
-				return -EINVAL;
-			}
-			fp -> f_pos += off;	
-			ret = fp -> f_pos;
-			break;
-		case SEEK_END:
-			if (off < 0 || off > MEM_SIZE) {
-				return -EINVAL;
-			}
-			fp -> f_pos = MEM_SIZE - off;
-			ret = fp -> f_pos;
-			break;
-		default : 
-			return -EINVAL;
-	}
-	return ret;
+	wait_event_interruptible(devp->rd_queue, devp->wp > devp->rp);
+	return 0;
 }
 
 ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *f_pos)
 {
 	struct memdev *devp = fp->private_data;
 	unsigned int size = count;
-	unsigned long p = *f_pos;
 	int ret = 0;
 	
 #if M_DEBUG
-	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
+	printk(KERN_INFO"%s:%d pos = %d size = %d\n", __func__, __LINE__, devp->rp, size);
 #endif
 
-
-	if ( p > MEM_SIZE) {
-		p = 0;
-	}
-	if (p + size > MEM_SIZE) {
-		size = MEM_SIZE - p;
-	}
-
-	wait_event_interruptible(devp->mem_queue, devp->flag > 0);
+	/*wait queue*/
+	wait_event_interruptible(devp->rd_queue, devp->wp > devp->rp);
 	down_read(&devp->rw_sem);
-	if (size > devp->flag) {
-		size = devp->flag;
+	if (size > devp->wp - devp->rp) {
+		size = devp->wp - devp->rp;
 	}
-	if (copy_to_user(buff, devp->mem + p, size)) {
+	if (copy_to_user(buff, devp->mem + devp->rp, size)) {
 		up_read(&devp->rw_sem);
 		ret = -EFAULT;
 	} else {
 		ret = size;
-		devp->flag -= size;
-		*f_pos += size;
+
+		devp->rp += size;
+		if (devp->rp == MEM_SIZE) {
+			devp->rp = 0;
+			devp->wp = 0;
+			wake_up_interruptible(&devp->wr_queue);
+		}
 		up_read(&devp->rw_sem);
+
 #if M_DEBUG
 		printk(KERN_INFO"%s:%d read %d bytes from mem!\n", __func__, __LINE__, size);
 #endif
@@ -123,34 +94,33 @@ ssize_t memdev_write(struct file *fp, const char __user *buff, size_t count, lof
 {
 	struct memdev *devp = fp->private_data;
 	unsigned int size = count;
-	unsigned long p = *f_pos;
 	int ret = 0;
 #if M_DEBUG
-	printk(KERN_INFO"%s:%d *f_pos = %d size = %d\n", __func__, __LINE__, p, size);
+	printk(KERN_INFO"%s:%d pos = %d size = %d\n", __func__, __LINE__, devp->wp, size);
 #endif
 
-	if ( p > MEM_SIZE) {
+	if (devp->wp > MEM_SIZE) {
 		return -EINVAL;
 	}
-	if (p + size > MEM_SIZE) {
-		size = MEM_SIZE - p;
+	wait_event_interruptible(devp->wr_queue, MEM_SIZE != devp->wp);
+	if (devp->wp + size > MEM_SIZE) {
+		size = MEM_SIZE - devp->wp;
 	}
 
 	down_write(&devp->rw_sem);
-	if (copy_from_user(devp->mem + p, buff, size)){
+	if (copy_from_user(devp->mem + devp->wp, buff, size)){
 		up_write(&devp->rw_sem);
 		ret = -EFAULT;
 	} else {
 		ret = size;
-		devp->flag += size;
-		*f_pos += size;
+		devp->wp += size;
 		up_write(&devp->rw_sem);
 #if M_DEBUG
 		printk(KERN_INFO"%s:%d write %d bytes to mem!\n", __func__, __LINE__, size);
 #endif
 	}
 
-	wake_up_interruptible(&devp->mem_queue);
+	wake_up_interruptible(&devp->rd_queue);
 	
 	return ret;
 }
@@ -166,7 +136,8 @@ int memdev_ioctl(struct inode *nodep, struct file *fp, unsigned int cmd, unsigne
 	switch (cmd) {
 		case 0 : 
 			devp = fp -> private_data;
-			 memset(devp->mem, 0, MEM_SIZE);
+			devp->rp = 0;
+			devp->wp = 0;
 			break;
 		default : ret = -EINVAL;
 	}
@@ -260,7 +231,9 @@ static int __init memdev_init(void)
 
 	sema_init(&devp->sem_open_restrict, 3);
 	init_rwsem(&devp->rw_sem);
-	init_waitqueue_head(&devp->mem_queue);
+	init_waitqueue_head(&devp->rd_queue);
+	init_waitqueue_head(&devp->wr_queue);
+
 
 	return 0;
 
