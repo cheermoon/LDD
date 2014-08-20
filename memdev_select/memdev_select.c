@@ -1,8 +1,8 @@
 /*  
- memdev_wq.c : ldd
+ memdev_select.c : ldd
 
 	Author : moon.cheng.2014@gmail.com  
-	Date   : 2014-08-12
+	Date   : 2014-08-20
 	Version: 1.0
 			
 	This program is a demo program for linux device drivers created by moon. 
@@ -16,11 +16,12 @@
     the Free Software Foundation; either version 2 of the License, or
     (at your option) any later version.
 
- */
+*/
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
+#include <linux/poll.h>
 #include <linux/wait.h> //wait_queue
 #include <linux/sched.h>//wait_queue
 #include <linux/semaphore.h>
@@ -52,6 +53,21 @@ loff_t memdev_llseek(struct file *fp, loff_t off, int ori)
 	return 0;
 }
 
+static unsigned int memdev_poll(struct file *fp, poll_table *wait)
+{
+	unsigned int mask = 0;
+	struct memdev *devp = fp->private_data;
+
+	poll_wait(fp, &devp->rd_queue, wait);
+	poll_wait(fp, &devp->wr_queue, wait);
+
+	if (devp->wp > devp->rp)
+		mask |= POLLIN | POLLRDNORM;
+	if (MEM_SIZE != devp->wp)
+		mask |= POLLOUT | POLLWRNORM;
+
+	return mask;
+}
 ssize_t memdev_read(struct file *fp, char __user *buff, size_t count, loff_t *f_pos)
 {
 	struct memdev *devp = fp->private_data;
@@ -187,6 +203,7 @@ static struct file_operations memdev_fops = {
 	.read = memdev_read,
 	.write = memdev_write,
 	.ioctl = memdev_ioctl,
+	.poll = memdev_poll,
 	.open = memdev_open,
 	.release = memdev_release,
 };
@@ -199,9 +216,9 @@ static int __init memdev_init(void)
 /*apply for device no*/
 	if (major_devno) {
 	   devno=MKDEV(major_devno, 0);
-	   ret = register_chrdev_region(devno, 0, "memdev_wq");
+	   ret = register_chrdev_region(devno, 0, "memdev_select");
 	} else {
-		ret = alloc_chrdev_region(&devno, 0, 1, "memdev_wq");
+		ret = alloc_chrdev_region(&devno, 0, 1, "memdev_select");
 		major_devno = MAJOR(devno);
 	}
 	if (!!ret) {
@@ -233,7 +250,6 @@ static int __init memdev_init(void)
 	init_rwsem(&devp->rw_sem);
 	init_waitqueue_head(&devp->rd_queue);
 	init_waitqueue_head(&devp->wr_queue);
-
 
 	return 0;
 
