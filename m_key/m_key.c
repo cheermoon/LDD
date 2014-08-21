@@ -14,45 +14,72 @@
 #include <linux/sched.h>
 #include <linux/irq.h> /*IRQ NO*/
 #include <linux/interrupt.h> /*request_irq free_irq*/
+#include <linux/uaccess.h> /*copy_to_user*/
 
 #define MAJOR_NO 0
-/*the gpio description struct*/
-struct pin_desc{
-	unsigned int pin; /*GPIO*/
-	unsigned int key_val; /*pin status*/
-};
 
 /*the key device struct*/
 struct m_key_dev {
 	struct cdev cdev; 
-	struct pin_desc key_desc;
 	wait_queue_head_t key_wq;
-	int key_down;
+	int key_change;
+	char key_val;
 };
-/*
-static struct pin_desc pins_desc[4] = {
-	{S3C2410_GPF0, 0x01},
-	{S3C2410_GPF2, 0x02},
-	{S3C2410_GPG3, 0x03},
-	{S3C2410_GPG11, 0x04},
-};
-*/
+
 static struct m_key_dev *devp;
 static int major_no;
 static struct class  *m_key_clsp;
 static struct device *m_key_devp;  
 
+/*the interrupt handle*/
 static irqreturn_t m_key_irq_handle(int irq, void *dev)
-{
+{	
+	struct m_key_dev *devp = (struct m_key_dev *)dev;
+	char tmp_val = 0;
 	
+	switch (irq) {
+		case IRQ_EINT0:
+			tmp_val = s3c2410_gpio_getpin(S3C2410_GPF0);
+			tmp_val = !!tmp_val << 0;
+			devp->key_val &= ~(1 << 0);
+			devp->key_val += tmp_val;
+			break;
+		case IRQ_EINT2:
+			tmp_val = s3c2410_gpio_getpin(S3C2410_GPF2);
+			tmp_val = !!tmp_val << 1;
+			devp->key_val &= ~(1 << 1);
+			devp->key_val += tmp_val;
+			break;
+		case IRQ_EINT11:
+			tmp_val = s3c2410_gpio_getpin(S3C2410_GPG3);
+			tmp_val = !!tmp_val <<2;
+			devp->key_val &= ~(1 << 2);
+			devp->key_val += tmp_val;
+			break;
+		case IRQ_EINT19:
+			tmp_val = s3c2410_gpio_getpin(S3C2410_GPG11);
+			tmp_val = !!tmp_val << 3;
+			devp->key_val &= ~(1 << 3);
+			devp->key_val += tmp_val;
+			break;				
+	}
+	
+	devp->key_change = 1;
+
+	wake_up_interruptible(&devp->key_wq);
 	return IRQ_HANDLED;
 }
 static ssize_t m_key_read(struct file *fp, char __user *buf, size_t size, loff_t *f_pos)
 {
 	struct m_key_dev *devp = fp->private_data;
+	
+	wait_event_interruptible(devp->key_wq, devp->key_change);
+	devp->key_change = 0; /*need lock*/
 
-	wait_event_interruptible(devp->key_wq, devp->key_down);
-	//struct pin_desc pinval = s3c2410_gpio_getpin(devp->key_desc.pin);
+	if (copy_to_user(buf, &devp->key_val, 1)) {
+		return -EAGAIN;
+	}
+
 	return 0;
 }
 
@@ -63,7 +90,7 @@ static int m_key_open(struct inode *nd, struct file *fp)
 	int ret;
 	fp->private_data = container_of(nd->i_cdev, struct m_key_dev, cdev);
 	devp = fp->private_data;
-	/*apply IRQ do not process exception*/
+	/*apply IRQ & do not process exception*/
 	ret = request_irq(IRQ_EINT0, m_key_irq_handle, IRQ_TYPE_EDGE_BOTH,  "key1", devp);
 	ret = request_irq(IRQ_EINT2, m_key_irq_handle, IRQ_TYPE_EDGE_BOTH,  "key2", devp);
 	ret = request_irq(IRQ_EINT11, m_key_irq_handle, IRQ_TYPE_EDGE_BOTH,  "key3", devp);
@@ -73,6 +100,7 @@ static int m_key_open(struct inode *nd, struct file *fp)
 
 static int m_key_close(struct inode *nd, struct file *fp)
 {
+	/*release IRQ*/
 	free_irq(IRQ_EINT0, devp);
 	free_irq(IRQ_EINT2, devp);
 	free_irq(IRQ_EINT11, devp);
@@ -120,7 +148,7 @@ static int __init m_key_init(void)
 
 	/*auto create devices files in /dev */
 	m_key_clsp = class_create(THIS_MODULE, "m_keys");
-	m_key_devp = device_create(m_key_clsp,  NULL, devno, NULL, "m_button%d", 1); /*/dev/m_button*/
+	m_key_devp = device_create(m_key_clsp,  NULL, devno, "m_key"); /*/dev/m_button*/
 	if (!m_key_devp) { /*if can not create a device file */
 		goto out3;
 	}
