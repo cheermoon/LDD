@@ -42,30 +42,30 @@ static irqreturn_t m_key_irq_handle(int irq, void *dev)
 			tmp_val = s3c2410_gpio_getpin(S3C2410_GPF0);
 			tmp_val = !!tmp_val << 0;
 			devp->key_val &= ~(1 << 0);
-			devp->key_val += tmp_val;
+			devp->key_val |= tmp_val;
 			break;
 		case IRQ_EINT2:
 			tmp_val = s3c2410_gpio_getpin(S3C2410_GPF2);
 			tmp_val = !!tmp_val << 1;
 			devp->key_val &= ~(1 << 1);
-			devp->key_val += tmp_val;
+			devp->key_val |= tmp_val;
 			break;
 		case IRQ_EINT11:
 			tmp_val = s3c2410_gpio_getpin(S3C2410_GPG3);
 			tmp_val = !!tmp_val <<2;
 			devp->key_val &= ~(1 << 2);
-			devp->key_val += tmp_val;
+			devp->key_val |= tmp_val;
 			break;
 		case IRQ_EINT19:
 			tmp_val = s3c2410_gpio_getpin(S3C2410_GPG11);
 			tmp_val = !!tmp_val << 3;
 			devp->key_val &= ~(1 << 3);
-			devp->key_val += tmp_val;
+			devp->key_val |= tmp_val;
 			break;				
 	}
 	
 	devp->key_change = 1;
-
+	printk("key_val = 0x%x", devp->key_val);
 	wake_up_interruptible(&devp->key_wq);
 	return IRQ_HANDLED;
 }
