@@ -35,7 +35,7 @@ static struct device *m_key_devp;
 static irqreturn_t m_key_irq_handle(int irq, void *dev)
 {	
 	struct m_key_dev *devp = (struct m_key_dev *)dev;
-	char tmp_val = 0;
+	int tmp_val = 0;
 	
 	switch (irq) {
 		case IRQ_EINT0:
@@ -65,7 +65,6 @@ static irqreturn_t m_key_irq_handle(int irq, void *dev)
 	}
 	
 	devp->key_change = 1;
-	printk("key_val = 0x%x", devp->key_val);
 	wake_up_interruptible(&devp->key_wq);
 	return IRQ_HANDLED;
 }
@@ -90,6 +89,7 @@ static int m_key_open(struct inode *nd, struct file *fp)
 	int ret;
 	fp->private_data = container_of(nd->i_cdev, struct m_key_dev, cdev);
 	devp = fp->private_data;
+	devp->key_val = 0xff;
 	/*apply IRQ & do not process exception*/
 	ret = request_irq(IRQ_EINT0, m_key_irq_handle, IRQ_TYPE_EDGE_BOTH,  "key1", devp);
 	ret = request_irq(IRQ_EINT2, m_key_irq_handle, IRQ_TYPE_EDGE_BOTH,  "key2", devp);
