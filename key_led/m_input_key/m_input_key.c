@@ -1,5 +1,5 @@
 /*  
-	m_input_key.c : ldd
+	key_led/m_input_key/m_input_key.c : ldd
  
 	   Author : moon.cheng.2014@gmail.com  
 	   Date   : 2014-08-26
@@ -15,6 +15,11 @@
 	   it under the terms of the GNU General Public License as published by
 	   the Free Software Foundation; either version 2 of the License, or
 	   (at your option) any later version.
+	   
+	   Modified: moon.cheng.2014@gmail.com 
+	   Date   : 2014-09-09
+	   Version: 0.2.0
+	   Description: Add some exception process in m_input_key_init function
  */
 
 
@@ -53,12 +58,12 @@ static irqreturn_t  m_key_irq_handler(int irq, void *dev_id)
 	int pin_val;
 
 	key_desc = (struct key_desc *)dev_id;
-	pin_val = s3c2410_gpio_getpin(key_desc->pin);
+	pin_val = s3c2410_gpio_getpin(key_desc->pin);/*read the pin state*/
 
 	/*report the event*/
 	if (pin_val) { /*the key is up */
 		input_event(m_key_input_p, EV_KEY, key_desc->key_val, 0);
-		input_sync(m_key_input_p); /*don't forget it*/
+		input_sync(m_key_input_p); /*don't forget to synchronize the events*/
 	} else { /*the key is down*/
 		input_event(m_key_input_p, EV_KEY, key_desc->key_val, 1);
 		input_sync(m_key_input_p);
@@ -69,7 +74,7 @@ static irqreturn_t  m_key_irq_handler(int irq, void *dev_id)
 
 static int __init m_input_key_init(void)
 {
-	int i, j, ret;
+	int i, j, ret; /*all are temp var*/
 
 	/*get a input device*/
 	m_key_input_p = input_allocate_device();
@@ -89,31 +94,44 @@ static int __init m_input_key_init(void)
 
 	/*request the irq, you must check the return value*/
 	for (i = 0; i < 4; i++) {
-		ret = request_irq(key_desc[i].irq, m_key_irq_handler, IRQT_BOTHEDGE, key_desc[i].name, &key_desc[i]);
+ 		ret = request_irq(key_desc[i].irq, m_key_irq_handler, 
+							IRQT_BOTHEDGE, key_desc[i].name, &key_desc[i]);
 		if (ret < 0) { /*if request failed*/
 			for (j =0; j < i; j++) {
+				/*free the irqs have requested*/
 				free_irq(key_desc[i].irq, &key_desc[i]); /*free the requested irq*/
 			}
-			return  ret;
+			goto FAILED_REQUEST_IRQ;
 		}
 	}
 
-	/*register input device*/
-	ret = input_register_device(m_key_input_p);
-	return 0;
+	/*register input device & end init*/
+	ret = input_register_device(m_key_input_p);	
+	if (!ret) 
+		goto OUT;
+	
+	/*if register device failed then free the irqs have requested*/
+	for (i = 0; i < 4; i++) {
+		free_irq(key_desc[i].irq, &key_desc[i]);
+	}
+	
+FAILED_REQUEST_IRQ:
+	input_free_device(m_key_input_p); /*free input device*/
+OUT:
+	return ret;
 }
 
 static void __exit m_input_key_exit(void)
 {
-	
 	int i;
+
+	/*unregister input device*/
+	input_unregister_device(m_key_input_p);
 	/*free irq*/
 	for (i = 0; i < 4; i++) {
 			free_irq(key_desc[i].irq, &key_desc[i]);
 	}
-
-	/*unregister input device*/
-	input_unregister_device(m_key_input_p);
+	/*free the input device*/
 	input_free_device(m_key_input_p);
 }
 
