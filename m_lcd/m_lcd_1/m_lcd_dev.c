@@ -21,6 +21,9 @@
 #include <linux/init.h>
 #include <linux/platform_device.h>
 
+#include "m_lcd.h"
+
+
 #define DRV_VERSION "0.1.0"
 
 static void	m_lcd_release(struct device *dev)
@@ -33,7 +36,7 @@ static void	m_lcd_release(struct device *dev)
 static struct resource m_lcd_rsc[] = {
 			[0] = {
         				.start = 0x4d000000,
-        				.end   = 0x4d000000 + 26*4 - 1,
+        				.end   = 0x4d000000 + sizeof(struct lcd_regs) - 1,
         				.flags = IORESOURCE_MEM,
 			}
 };

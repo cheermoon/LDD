@@ -26,28 +26,9 @@
 #include <asm/io.h>
 #include <linux/dma-mapping.h>
 
-#define DRV_VERSION "0.1.0"
+#include "m_lcd.h"
 
-struct lcd_regs {
-		unsigned long	lcdcon1;
-		unsigned long	lcdcon2;
-		unsigned long	lcdcon3;
-		unsigned long	lcdcon4;
-		unsigned long	lcdcon5;
-    		unsigned long	lcdsaddr1;
-    		unsigned long	lcdsaddr2;
-    		unsigned long	lcdsaddr3;
-    		unsigned long	redlut;
-    		unsigned long	greenlut;
-    		unsigned long	bluelut;
-		unsigned long	reserved[9];
-    		unsigned long	dithmode;
-		unsigned long	tpal;
-		unsigned long	lcdintpnd;
-		unsigned long	lcdsrcpnd;
-		unsigned long	lcdintmsk;
-		unsigned long	lpcsel;
-};
+#define DRV_VERSION "0.1.0"
 
 static volatile struct lcd_regs *m_lcd_regs;
 static u32 pseudo_palette[16];
