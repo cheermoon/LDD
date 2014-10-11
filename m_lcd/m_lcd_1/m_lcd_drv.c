@@ -161,8 +161,8 @@ static int m_lcd_gpio_map(void)
 	gpio_b_con = (volatile unsigned long *)ioremap(0x56000010, 8);
 	gpio_b_dat = gpio_b_con +1;
 	gpio_c_con = (volatile unsigned long *)ioremap(0x56000020, 4);
-	gpio_d_con = (volatile unsigned long *)ioremap(0x56000020, 4);
-	gpio_g_con = (volatile unsigned long *)ioremap(0x56000020, 4);
+	gpio_d_con = (volatile unsigned long *)ioremap(0x56000030, 4);
+	gpio_g_con = (volatile unsigned long *)ioremap(0x56000040, 4);
 
 OUT:
 	return ret;
