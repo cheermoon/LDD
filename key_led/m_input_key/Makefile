@@ -6,6 +6,7 @@ obj-m += $(KO_NAME).o
 
 default:
 	$(MAKE) -C $(KERNEL_BUILD_PATH) M=$(PWD) modules
+	@cp *.ko ../
 
 clean:
 	$(MAKE) -C $(KERNEL_BUILD_PATH) M=$(PWD) clean
