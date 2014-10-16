@@ -42,6 +42,7 @@ static struct resource m_lcd_rsc[] = {
 };
 
 /*our led device struct*/
+static u64 m_lcd_dma_mask = 0xffffffffUL;
 static struct platform_device m_lcd_dev = {
 	.name                      =	"m_lcd",
 	.id                             =	-1,
@@ -49,6 +50,8 @@ static struct platform_device m_lcd_dev = {
 	.resource               =	m_lcd_rsc,
 	.dev                         =	{
 						.release  = m_lcd_release,
+						.dma_mask = &m_lcd_dma_mask,
+						.coherent_dma_mask = 0xffffffffUL,
 					}
 };
 
