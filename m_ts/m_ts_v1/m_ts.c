@@ -30,7 +30,7 @@ static void m_adc_start(void)
 
 static void m_measure_xy_mode(void)
 {
-	unsigned long tmp;
+	unsigned long tmp;
 	tmp = ioread32(&m_ts_regs->adctsc);
 	tmp |= (3<<2);
 	iowrite32(tmp, &m_ts_regs->adctsc);
@@ -47,14 +47,13 @@ static void touch_up_detect_mode(void)
 static irqreturn_t m_touch_irq_handle(int irq, void *dev)
 {
 	if (ioread16(&(m_ts_regs->adcdat0)) & (1<<15)) { //touch up
-		printk(KERN_INFO"Touch up\n");
+		printk("Touch up\n");
 		touch_down_detect_mode();
-	} else {//touch down
-		
+	} else {//touch down	
 		m_measure_xy_mode();
 		m_adc_start();
-		 /*
-		printk(KERN_INFO"Touch down\n");
+		/*
+		printk("Touch down\n");
 		touch_up_detect_mode();
 		*/
 	}
@@ -104,7 +103,7 @@ static int m_ts_drv_init(void)
 	clk = clk_get(NULL, "adc");
 	clk_enable(clk);
 	/*remap the regs*/
-	m_ts_regs = ioremap(0x5800000, sizeof(struct ts_regs));
+	m_ts_regs = ioremap(0x58000000, sizeof(struct ts_regs));
 	iowrite32((1<<14  | 49<<6), &(m_ts_regs->adccon));
 	/*request IRQ*/
 	ret = request_irq(IRQ_TC,  m_touch_irq_handle, IRQF_SAMPLE_RANDOM,	"m_ts", NULL);
@@ -128,3 +127,4 @@ MODULE_AUTHOR("moon.cheng.2014@gmail.com");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
 MODULE_DESCRIPTION("this is a touch screen test driver created by moon.cheng");
+
