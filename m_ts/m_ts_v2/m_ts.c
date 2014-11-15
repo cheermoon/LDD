@@ -5,8 +5,9 @@
 #include <linux/irq.h> 	/*interrupt*/
 #include <linux/interrupt.h>
 #include <asm/io.h>	
+#include <linux/timer.h>	/*timer*/
  
-#define DRV_VERSION "v 0.1"
+#define DRV_VERSION "v 0.2"
 
 struct ts_regs {
 	unsigned long adccon;
@@ -19,6 +20,7 @@ struct ts_regs {
 
 static struct input_dev *m_ts_input_dev;
 static volatile struct ts_regs *m_ts_regs;
+static struct timer_list m_ts_timer;
 
 static void m_adc_start(void)
 {
@@ -49,13 +51,9 @@ static irqreturn_t m_touch_irq_handle(int irq, void *dev)
 	if (ioread32(&(m_ts_regs->adcdat0)) & (1<<15)) { //touch up
 		printk("Touch up\n");
 		touch_down_detect_mode();
-	} else {//touch down	
+	} else {//touch down
 		m_measure_xy_mode();
 		m_adc_start();
-		/*
-		printk("Touch down\n");
-		touch_up_detect_mode();
-		*/
 	}
 	return IRQ_HANDLED;
 }
@@ -75,10 +73,22 @@ static irqreturn_t m_adc_irq_handle(int irq, void *dev)
 	} else {
 		printk(KERN_INFO"x= %ld y=%ld\n", adcdat0 & 0x3ff, adcdat1 & 0x3ff);
 		touch_up_detect_mode();
+		mod_timer(&m_ts_timer,	jiffies + HZ/10);
 	}
 	
 	return IRQ_HANDLED;
 }
+
+void m_ts_timer_func(unsigned long args)
+{	
+	if (ioread32(&(m_ts_regs->adcdat0)) & (1<<15)) { //touch up
+		touch_down_detect_mode();
+	} else {//touch down
+		m_measure_xy_mode();
+		m_adc_start();
+	}
+}
+
 static int m_ts_drv_init(void)
 {
 	int ret;
@@ -105,15 +115,24 @@ static int m_ts_drv_init(void)
 	/*remap the regs*/
 	m_ts_regs = ioremap(0x58000000, sizeof(struct ts_regs));
 	iowrite32((1<<14  | 49<<6), &(m_ts_regs->adccon));
+	iowrite16(0x0fff, &(m_ts_regs->adcdly));
 	/*request IRQ*/
 	ret = request_irq(IRQ_TC,  m_touch_irq_handle, IRQF_SAMPLE_RANDOM,	"m_ts", NULL);
 	ret = request_irq(IRQ_ADC, m_adc_irq_handle, IRQF_SAMPLE_RANDOM, "m_adc", NULL);
+
+	/*init&add timer*/
+	init_timer(&m_ts_timer);
+	m_ts_timer.expires = jiffies + HZ/10;
+	m_ts_timer.data = 0;
+	m_ts_timer.function = m_ts_timer_func;
+	add_timer(&m_ts_timer);
 	
 	return 0;
 }
 
 static void m_ts_drv_exit(void)
 {
+	del_timer(&m_ts_timer);
 	iounmap(m_ts_regs);
 	input_unregister_device(m_ts_input_dev);
 	input_free_device(m_ts_input_dev);
